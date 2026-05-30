@@ -10,7 +10,7 @@ import LowScoreModal from '../common/LowScoreModal'
 import SignaturePad from '../signature/SignaturePad'
 
 export default function ChecklistScreen() {
-  const { role, weekType: rawWeekType, reset } = useAppContext()
+  const { role, weekType: rawWeekType, subject, reset } = useAppContext()
   const weekType = rawWeekType!
   if (!role || !rawWeekType) return null
 
@@ -22,13 +22,19 @@ export default function ChecklistScreen() {
     return allItems
   }, [allItems, role])
 
-  const { results, updateEvaluation, getResult, loadFromSession } = useEvaluations(allItems, { weekType })
+  const { results, updateEvaluation, getResult, loadFromSession } = useEvaluations(
+    allItems,
+    { weekType, targetName: subject.name, department: subject.department, startDate: subject.startDate }
+  )
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showLowScore, setShowLowScore] = useState(false)
   const [pendingScore, setPendingScore] = useState(0)
-  const [showFinalSign, setShowFinalSign] = useState(false)
-  const [finalSignerName, setFinalSignerName] = useState('')
+  const [lowScoreReason, setLowScoreReason] = useState('')
+
+  // 서명 관련 상태 (최종 / 일괄)
+  const [signMode, setSignMode] = useState<'final' | 'batch' | null>(null)
+  const [signerName, setSignerName] = useState('')
 
   const doneCount = useMemo(() => {
     const field = role === 'preceptee' ? 'preceptee'
@@ -41,7 +47,6 @@ export default function ChecklistScreen() {
     }).length
   }, [results, visibleItems, role, getResult])
 
-  // 수간호사: 최종 평균 점수 (0~3점 → 100점 환산)
   const headNurseAvgScore = useMemo(() => {
     if (role !== 'headNurse') return null
     const scored = results.filter(r => r.headNurse.score !== null)
@@ -50,17 +55,21 @@ export default function ChecklistScreen() {
     return (avg / 3) * 100
   }, [results, role])
 
-  function handleDownload() {
-    const session: ChecklistSession = {
-      id: `${weekType}_${Date.now()}`,
-      targetName: '',
+  function buildSession(extra?: Partial<ChecklistSession>): ChecklistSession {
+    return {
+      id: `${subject.employeeId || 'no-id'}_${weekType}_${Date.now()}`,
+      targetName: subject.name,
       weekType,
-      department: '',
-      startDate: '',
+      department: subject.department,
+      startDate: subject.startDate,
       results,
       savedAt: new Date().toISOString(),
+      ...extra,
     }
-    downloadSession(session)
+  }
+
+  function handleDownload(extra?: Partial<ChecklistSession>) {
+    downloadSession(buildSession(extra))
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -76,77 +85,98 @@ export default function ChecklistScreen() {
     }
   }
 
-  // 수간호사 최종 서명 시작
   function handleFinalSignStart() {
     const score = headNurseAvgScore ?? 0
     if (score < 70) {
       setPendingScore(score)
       setShowLowScore(true)
     } else {
-      setShowFinalSign(true)
+      setSignMode('final')
     }
   }
 
   function handleLowScoreConfirm(reason: string) {
+    setLowScoreReason(reason)
     setShowLowScore(false)
-    // reason은 추후 session에 저장 가능
-    void reason
-    setShowFinalSign(true)
+    setSignMode('final')
   }
 
-  function handleFinalSignSave(dataUrl: string) {
-    // 수간호사 서명을 모든 headNurse 평가에 일괄 적용
+  function handleSignSave(dataUrl: string) {
     const now = new Date().toISOString()
-    results.forEach(r => {
-      updateEvaluation(r.itemId, 'headNurse', {
-        signatureImage: dataUrl,
-        signerName: finalSignerName,
-        signedAt: now,
+    const name = signerName.trim()
+
+    if (signMode === 'final') {
+      // 수간호사 전체 일괄 적용
+      results.forEach(r => {
+        updateEvaluation(r.itemId, 'headNurse', { signatureImage: dataUrl, signerName: name, signedAt: now })
       })
-    })
-    setShowFinalSign(false)
-    handleDownload()
+      setSignMode(null)
+      handleDownload({ lowScoreReason: lowScoreReason || undefined })
+    } else if (signMode === 'batch') {
+      // 점수가 입력된 문항에만 현재 역할 서명 일괄 적용
+      const field = role === 'preceptee' ? 'preceptee'
+        : role === 'preceptor' ? 'preceptor'
+        : role === 'educator' ? 'educator'
+        : 'headNurse'
+      visibleItems.forEach(item => {
+        const r = getResult(item.id)
+        if (r && r[field].score !== null && role) {
+          updateEvaluation(item.id, role, { signatureImage: dataUrl, signerName: name, signedAt: now })
+        }
+      })
+      setSignMode(null)
+    }
   }
+
+  const headerInfo = `${subject.name} · ${subject.employeeId ? subject.employeeId + ' · ' : ''}${subject.department}`
 
   return (
     <>
       <div className="min-h-screen bg-gray-50">
         <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3">
-          <div className="max-w-2xl mx-auto flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-400">{weekType === '4week' ? '4주' : '8주'} 체크리스트</p>
-              <p className="text-sm font-semibold text-gray-800">{ROLE_LABELS[role]}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 mr-1">{doneCount} / {visibleItems.length}</span>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-2 py-1"
-              >
-                불러오기
-              </button>
-              <button
-                onClick={handleDownload}
-                className="text-xs text-white bg-blue-500 hover:bg-blue-600 rounded-lg px-2 py-1"
-              >
-                저장
-              </button>
-              <button
-                onClick={() =>
-                  import('../../lib/excel/exportExcel')
-                    .then(m => m.exportToExcel(results, weekType, ''))
-                    .catch(e => alert((e as Error).message))
-                }
-                className="text-xs text-white bg-green-600 hover:bg-green-700 rounded-lg px-2 py-1"
-              >
-                엑셀출력
-              </button>
-              <button
-                onClick={reset}
-                className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-2 py-1"
-              >
-                처음으로
-              </button>
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs text-gray-400 truncate">{weekType === '4week' ? '4주' : '8주'} · {ROLE_LABELS[role]}</p>
+                <p className="text-sm font-semibold text-gray-800 truncate">{headerInfo}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                <span className="text-xs text-gray-500">{doneCount}/{visibleItems.length}</span>
+                <button
+                  onClick={() => { setSignerName(''); setSignMode('batch') }}
+                  className="text-xs text-gray-600 border border-gray-200 rounded-lg px-2 py-1 hover:bg-gray-50"
+                >
+                  일괄서명
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-xs text-gray-500 border border-gray-200 rounded-lg px-2 py-1 hover:bg-gray-50"
+                >
+                  불러오기
+                </button>
+                <button
+                  onClick={() => handleDownload()}
+                  className="text-xs text-white bg-blue-500 hover:bg-blue-600 rounded-lg px-2 py-1"
+                >
+                  저장
+                </button>
+                <button
+                  onClick={() =>
+                    import('../../lib/excel/exportExcel')
+                      .then(m => m.exportToExcel(results, weekType, subject.name))
+                      .catch(e => alert((e as Error).message))
+                  }
+                  className="text-xs text-white bg-green-600 hover:bg-green-700 rounded-lg px-2 py-1"
+                >
+                  엑셀출력
+                </button>
+                <button
+                  onClick={reset}
+                  className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-2 py-1"
+                >
+                  처음으로
+                </button>
+              </div>
             </div>
           </div>
         </header>
@@ -178,7 +208,6 @@ export default function ChecklistScreen() {
           })}
         </main>
 
-        {/* 수간호사 최종 서명 버튼 */}
         {role === 'headNurse' && (
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-3">
             <div className="max-w-2xl mx-auto flex items-center justify-between">
@@ -206,12 +235,12 @@ export default function ChecklistScreen() {
         />
       )}
 
-      {showFinalSign && (
+      {signMode !== null && (
         <SignaturePad
-          onSave={handleFinalSignSave}
-          onCancel={() => setShowFinalSign(false)}
-          signerName={finalSignerName}
-          onSignerNameChange={setFinalSignerName}
+          onSave={handleSignSave}
+          onCancel={() => setSignMode(null)}
+          signerName={signerName}
+          onSignerNameChange={setSignerName}
         />
       )}
     </>

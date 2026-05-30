@@ -2,16 +2,34 @@ import { createContext, useContext, useState } from 'react'
 import type { Role } from '../../types/userRole'
 import type { WeekType } from '../../types/checklist'
 
+export type SubjectInfo = {
+  employeeId: string   // 사번
+  name: string         // 성명
+  department: string   // 부서
+  startDate: string    // 입사일
+  preceptorName: string // 담당 프리셉터
+}
+
+const EMPTY_SUBJECT: SubjectInfo = {
+  employeeId: '',
+  name: '',
+  department: '',
+  startDate: '',
+  preceptorName: '',
+}
+
 type AppState = {
   role: Role | null
   weekType: WeekType | null
   sessionId: string | null
+  subject: SubjectInfo
 }
 
 type AppContextValue = AppState & {
   setRole: (role: Role) => void
   setWeekType: (weekType: WeekType) => void
   setSessionId: (id: string) => void
+  setSubject: (info: SubjectInfo) => void
   reset: () => void
 }
 
@@ -22,15 +40,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     role: null,
     weekType: null,
     sessionId: null,
+    subject: EMPTY_SUBJECT,
   })
 
   const setRole = (role: Role) => setState(s => ({ ...s, role }))
   const setWeekType = (weekType: WeekType) => setState(s => ({ ...s, weekType }))
   const setSessionId = (sessionId: string) => setState(s => ({ ...s, sessionId }))
-  const reset = () => setState({ role: null, weekType: null, sessionId: null })
+  const setSubject = (subject: SubjectInfo) => setState(s => ({ ...s, subject }))
+  const reset = () => setState({ role: null, weekType: null, sessionId: null, subject: EMPTY_SUBJECT })
 
   return (
-    <AppContext.Provider value={{ ...state, setRole, setWeekType, setSessionId, reset }}>
+    <AppContext.Provider value={{ ...state, setRole, setWeekType, setSessionId, setSubject, reset }}>
       {children}
     </AppContext.Provider>
   )

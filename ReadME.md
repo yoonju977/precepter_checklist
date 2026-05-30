@@ -1,73 +1,203 @@
-# React + TypeScript + Vite
+# 신규간호사 체크리스트 웹앱
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+신규간호사 4주/8주 체크리스트를 PC와 모바일에서 역할별로 입력하고, 원본 엑셀 양식과 동일한 형태로 출력하는 웹앱입니다.
 
-Currently, two official plugins are available:
+**배포 URL**: https://yoonju977.github.io/precepter_checklist/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## 기술 스택
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| 구분 | 기술 |
+|------|------|
+| Frontend | React 19 + TypeScript 6 + Vite 8 |
+| 스타일 | Tailwind CSS v4 |
+| 전자서명 | signature_pad |
+| 엑셀 출력 | ExcelJS |
+| 저장 | LocalStorage + JSON 파일 |
+| 배포 | GitHub Pages (GitHub Actions) |
 
-## Expanding the ESLint configuration
+> **Node.js 22 이상 필요** — Vite 8의 rolldown 바인딩 요구사항
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## 로컬 실행
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+```bash
+# Node.js 22로 전환 (nvm 사용 시)
+nvm use 22
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# 의존성 설치
+npm install
+
+# 개발 서버 실행
+npm run dev
+
+# 빌드
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 주요 기능
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 역할별 화면 분리
+
+4개 역할이 있으며, 각 역할은 **볼 수 있는 정보와 입력할 수 있는 정보가 분리**됩니다.
+
+| 역할 | 표시 문항 | 열람 가능 점수 | 입력 가능 |
+|------|----------|-------------|---------|
+| 프리셉티 | 전체 | 자가평가 점수만 | 자가평가 점수·메모·서명 |
+| 프리셉터 | 일반 문항 (교육전담 문항 제외) | 프리셉티 자가평가 | 프리셉터 평가 점수·메모·서명 |
+| 교육전담 | 회색 문항만 | 프리셉티 자가평가 | 교육전담 평가 점수·메모·서명 |
+| 수간호사 | 전체 | 모든 역할의 점수 | 최종 평가 점수·메모·서명 |
+
+### 회색 문항 (교육전담 담당)
+
+원본 엑셀에서 배경색 `DAE3F3` 또는 연번에 `*`가 붙은 문항은 교육전담이 평가합니다. 앱에서는 카드 왼쪽에 노란 테두리로 구분됩니다.
+
+- 4주 기준: 158개 문항 중 54개가 교육전담 담당
+- 8주 기준: 82개 문항 중 16개가 교육전담 담당
+
+### 전자서명
+
+- 손가락 / 터치펜 / 마우스로 직접 서명
+- 서명자 이름 + 서명 이미지 + 서명일시 함께 저장
+- 각 카드에서 개별 서명 가능
+- 수간호사는 최종 서명 시 전체 문항에 일괄 적용
+
+### 저장 및 불러오기
+
+- **자동저장**: 입력값이 바뀔 때마다 800ms 후 브라우저 LocalStorage에 자동 저장
+- **JSON 저장**: 헤더의 "저장" 버튼으로 JSON 파일 다운로드
+- **JSON 불러오기**: 헤더의 "불러오기" 버튼으로 JSON 파일 복원
+- 저장 파일에 포함되는 정보: 대상자 정보, 4주/8주 구분, 문항별 점수·메모·서명 이미지·서명자·서명일시·저장일시
+
+### XLSX 출력
+
+- 원본 엑셀 양식을 템플릿으로 사용하여 **디자인 그대로** 출력
+- 자가평가·교육자 평가 점수, 서명자명, 서명일시를 해당 셀에 자동 입력
+- 전자서명 이미지를 서명칸에 삽입
+- 4주/8주 각각 별도 출력 가능
+- 헤더의 "엑셀출력" 버튼 클릭 → xlsx 파일 다운로드
+
+### 70점 미만 경고
+
+수간호사가 최종 서명을 시도할 때 평균 점수(0~3점 → 100점 환산)가 **70점 미만이면 경고 팝업**이 표시됩니다.
+- "돌아가서 수정하기" → 평가 화면으로 복귀
+- "그래도 저장하기" → 사유 기록 후 강제 저장
+
+---
+
+## 화면 흐름 (Flow)
+
+```
+앱 접속
+  │
+  ▼
+역할 선택 화면
+  │ 프리셉티 / 프리셉터 / 교육전담 / 수간호사 중 선택
+  ▼
+4주 / 8주 선택 화면
+  │
+  ▼
+체크리스트 입력 화면
+  ├─ 역할에 맞는 문항만 표시
+  ├─ 0·1·2·3점 버튼으로 점수 입력
+  ├─ 메모 입력
+  ├─ 카드별 서명 (이름 입력 + 손가락/마우스 서명)
+  ├─ 헤더: 진행률 표시 / 저장 / 불러오기 / 엑셀출력
+  │
+  └─ [수간호사 전용] 하단 "최종 서명 및 저장" 버튼
+        │
+        ├─ 평균 점수 70점 이상 → 서명 패드 표시 → 전체 일괄 서명 → JSON 자동 다운로드
+        └─ 평균 점수 70점 미만 → 경고 팝업 → 사유 입력 후 진행 또는 수정
+```
+
+---
+
+## 역할별 사용 시나리오
+
+### 프리셉티 (신규간호사)
+1. 역할 선택: **프리셉티**
+2. 4주 또는 8주 선택
+3. 전체 문항에 대해 자가평가 점수(0~3점)와 메모 입력
+4. 각 문항 또는 전체에 전자서명
+5. JSON 저장하여 파일 전달 또는 브라우저에서 자동 유지
+
+### 프리셉터
+1. 프리셉티가 저장한 JSON 파일 불러오기 (또는 같은 기기에서 이어서 작업)
+2. 역할 선택: **프리셉터**
+3. 일반 문항만 표시됨 (교육전담 문항은 비표시)
+4. 프리셉티 자가평가 점수를 참고하여 프리셉터 평가 점수·메모 입력
+5. 서명 후 JSON 저장
+
+> 프리셉터가 2명인 경우: 1번 프리셉터가 평가한 문항은 잠금 표시됨. 2번 프리셉터는 미평가 문항만 입력.
+
+### 교육전담
+1. JSON 파일 불러오기
+2. 역할 선택: **교육전담**
+3. 교육전담 담당 회색 문항만 표시됨
+4. 평가 점수·메모·서명 입력 후 JSON 저장
+
+### 수간호사
+1. 완성된 JSON 파일 불러오기
+2. 역할 선택: **수간호사**
+3. 전체 문항에서 프리셉티·프리셉터·교육전담 점수 모두 확인
+4. 최종 평가 점수·메모 입력
+5. "최종 서명 및 저장" 클릭 → 서명 → XLSX 출력
+
+---
+
+## 미구현 / 향후 과제
+
+| 항목 | 우선순위 | 비고 |
+|------|---------|------|
+| 대상자 정보 입력 (사번·성명·부서·입사일) | 높음 | 저장 파일·엑셀 출력에 필요 |
+| 일괄 서명 버튼 (완료 문항 전체 서명) | 높음 | 현재는 카드별 개별 서명만 가능 |
+| 70점 미만 사유 저장 반영 | 중간 | 팝업은 있으나 사유가 JSON에 저장 안 됨 |
+| 수간호사 화면에서 모든 문항의 타 역할 점수 표시 | 중간 | 현재 evaluatorType 기준으로 분기 표시 |
+| Google Apps Script 연동 (서버 저장) | 낮음 (2단계) | 여러 기기 동시 입력을 위해 필요 |
+
+---
+
+## 배포 구조
+
+```
+yoonju977/precepter_checklist  ← 테스트용 포크
+  └─ main push 시 GitHub Actions 자동 빌드·배포
+  └─ 배포 URL: https://yoonju977.github.io/precepter_checklist/
+
+yesyeseul/precepter_checklist  ← 원본 레포 (테스트 완료 후 반영)
+```
+
+원본 레포에 반영할 때:
+```bash
+git push upstream main
+```
+
+---
+
+## 파일 구조 (주요)
+
+```
+src/
+├── components/
+│   ├── checklist/        # ChecklistScreen, ChecklistCard, ScoreInput
+│   ├── common/           # LowScoreModal (70점 경고)
+│   ├── layout/           # RoleSelectScreen, WeekSelectScreen
+│   └── signature/        # SignaturePad
+├── features/
+│   ├── checklist/        # ChecklistContext (전역 상태)
+│   ├── evaluations/      # useEvaluations (평가 상태 관리)
+│   └── storage/          # localStorage.ts, jsonIO.ts
+├── lib/
+│   └── excel/            # exportExcel.ts (XLSX 출력)
+├── types/                # checklist.ts, evaluation.ts, userRole.ts
+└── data/
+    └── checklistData.ts  # 4주/8주 문항 데이터
+
+public/
+└── templates/
+    └── checklist-template.xlsx  # 원본 엑셀 출력 템플릿
 ```
