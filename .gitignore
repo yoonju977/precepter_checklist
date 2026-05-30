@@ -1,3 +1,18 @@
+# Claude Code
+CLAUDE.md
+.claude/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Google Apps Script
+gas/
+
+# Export / generated files
+public/data/*.csv
+
 # Logs
 logs
 *.log
