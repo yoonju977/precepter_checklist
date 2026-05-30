@@ -17,6 +17,8 @@ export type ChecklistItemResult = {
 export type ChecklistSession = {
   id: string
   targetName: string
+  employeeId?: string
+  preceptorName?: string
   weekType: import('./checklist').WeekType
   department: string
   startDate: string

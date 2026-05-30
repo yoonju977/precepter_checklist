@@ -67,6 +67,8 @@ export default function ChecklistScreen() {
     return {
       id: `${subject.employeeId || 'no-id'}_${weekType}_${Date.now()}`,
       targetName: subject.name,
+      employeeId: subject.employeeId || undefined,
+      preceptorName: subject.preceptorName || undefined,
       weekType,
       department: subject.department,
       startDate: subject.startDate,
