@@ -100,3 +100,63 @@ export async function exportToExcel(
   a.click()
   URL.revokeObjectURL(url)
 }
+
+/** XLSX 파일명만 반환하는 헬퍼 */
+export function buildExcelFileName(weekType: WeekType, targetName: string) {
+  return `신규간호사_체크리스트_${weekType === '4week' ? '4주' : '8주'}_${targetName || ''}_${new Date().toISOString().slice(0, 10)}.xlsx`
+}
+
+/** 브라우저 다운로드 없이 ArrayBuffer + 파일명만 반환 (서버 업로드용) */
+export async function buildExcelBuffer(
+  results: ChecklistItemResult[],
+  weekType: WeekType,
+  targetName: string,
+): Promise<{ buffer: ArrayBuffer; fileName: string }> {
+  const templateUrl = import.meta.env.BASE_URL + 'templates/checklist-template.xlsx'
+  const response = await fetch(templateUrl)
+  if (!response.ok) throw new Error('템플릿 파일을 불러올 수 없습니다.')
+  const arrayBuffer = await response.arrayBuffer()
+
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(arrayBuffer)
+
+  const sheet = workbook.getWorksheet(SHEET_NAME[weekType])
+  if (!sheet) throw new Error('시트를 찾을 수 없습니다.')
+
+  const resultMap = new Map(results.map(r => {
+    const numStr = r.itemId.replace(`${weekType}_`, '')
+    return [parseInt(numStr, 10), r]
+  }))
+
+  sheet.eachRow((row, rowNum) => {
+    if (rowNum < 17) return
+    const rawNum = row.getCell(COL.NUM).value
+    if (rawNum === null || rawNum === undefined) return
+    const num = parseInt(String(rawNum).replace('*', ''), 10)
+    if (isNaN(num)) return
+    const result = resultMap.get(num)
+    if (!result) return
+    if (result.preceptee.score !== null) row.getCell(COL.SELF_SCORE).value = result.preceptee.score
+    const evalResult = result.preceptor.score !== null ? result.preceptor : result.educator
+    if (evalResult.score !== null) {
+      row.getCell(COL.EVAL_SCORE).value = evalResult.score
+      row.getCell(COL.SIGNER).value = evalResult.signerName || ''
+      if (evalResult.signedAt) row.getCell(COL.SIGN_DATE).value = evalResult.signedAt.slice(0, 10)
+    }
+  })
+
+  const repSign = results.find(r => r.preceptor.signatureImage)?.preceptor
+    ?? results.find(r => r.educator.signatureImage)?.educator
+  if (repSign?.signatureImage) {
+    const base64 = repSign.signatureImage.split(',')[1]
+    sheet.addImage(workbook.addImage({ base64, extension: 'png' }), { tl: { col: COL.SIGNER - 1, row: 7 }, ext: { width: 80, height: 30 } })
+  }
+  const hnSign = results.find(r => r.headNurse.signatureImage)?.headNurse
+  if (hnSign?.signatureImage) {
+    const base64 = hnSign.signatureImage.split(',')[1]
+    sheet.addImage(workbook.addImage({ base64, extension: 'png' }), { tl: { col: COL.SIGNER - 1, row: 10 }, ext: { width: 80, height: 30 } })
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer()
+  return { buffer, fileName: buildExcelFileName(weekType, targetName) }
+}

@@ -5,7 +5,7 @@ import { getChecklist } from '../../data/checklistData'
 import { ROLE_LABELS } from '../../types/userRole'
 import { downloadSession, readSessionFile } from '../../features/storage/jsonIO'
 import type { ChecklistSession } from '../../types/evaluation'
-import { gasSaveSession, gasListSessions, gasLoadSession } from '../../lib/googleDrive/gasClient'
+import { gasSaveWithExcel, gasSaveSession, gasListSessions, gasLoadSession } from '../../lib/googleDrive/gasClient'
 import type { SessionMeta } from '../../lib/googleDrive/gasClient'
 import ChecklistCard from './ChecklistCard'
 import LowScoreModal from '../common/LowScoreModal'
@@ -85,7 +85,15 @@ export default function ChecklistScreen() {
   async function handleServerSave() {
     setServerStatus('saving')
     try {
-      await gasSaveSession(buildSession())
+      const session = buildSession()
+      try {
+        const { buildExcelBuffer } = await import('../../lib/excel/exportExcel')
+        const { buffer, fileName } = await buildExcelBuffer(results, weekType, subject.name)
+        await gasSaveWithExcel(session, buffer, fileName)
+      } catch {
+        // XLSX 생성 실패 시 JSON만 저장
+        await gasSaveSession(session)
+      }
       setServerStatus('saved')
       setTimeout(() => setServerStatus('idle'), 2000)
     } catch {
