@@ -12,18 +12,14 @@ export default function SubjectInfoScreen() {
 
   const [errors, setErrors] = useState<Partial<Record<keyof SubjectInfo, string>>>({})
 
-  function validate() {
-    const e: typeof errors = {}
-    if (!form.name.trim()) e.name = '성명을 입력하세요'
-    if (!form.employeeId.trim()) e.employeeId = '사번을 입력하세요'
-    return e
-  }
-
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const errs = validate()
+    const trimmed = { employeeId: form.employeeId.trim(), name: form.name.trim() }
+    const errs: typeof errors = {}
+    if (!trimmed.name) errs.name = '성명을 입력하세요'
+    if (!trimmed.employeeId) errs.employeeId = '사번을 입력하세요'
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
-    setSubject(form)
+    setSubject(trimmed)
   }
 
   const field = (

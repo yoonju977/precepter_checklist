@@ -142,7 +142,9 @@ export default function ChecklistScreen() {
   }
 
   function buildSubjectFolderName(): string {
-    return `${subject.employeeId}_${subject.name}_${surveyMeta.department || '미입력'}`
+    const emp = (subject.employeeId || '').trim()
+    const nm = (subject.name || '').trim()
+    return `${emp}_${nm}`
   }
 
   function buildSession(extra?: Partial<ChecklistSession>): ChecklistSession {
@@ -320,6 +322,17 @@ export default function ChecklistScreen() {
   }
 
   async function applySignatureAndSubmit(dataUrl: string, now: string, name: string) {
+    // React state 업데이트 전에 buildSession이 호출되는 stale state 문제 방지:
+    // 업데이트된 results를 직접 계산해서 finalSession에 전달
+    const updatedResults = results.map(r => {
+      const ev = r[roleField]
+      if (ev.score !== null) {
+        return { ...r, [roleField]: { ...ev, signatureImage: dataUrl, signerName: name, signedAt: now } }
+      }
+      return r
+    })
+
+    // UI 및 LocalStorage 자동저장용 상태 업데이트
     visibleItems.forEach(item => {
       const r = getResult(item.id)
       if (r && r[roleField].score !== null) {
@@ -329,6 +342,7 @@ export default function ChecklistScreen() {
     submitRole(role)
 
     const finalSession = buildSession({
+      results: updatedResults,
       submittedRoles: { ...submittedRoles, [role]: now },
       lowScoreReason: lowScoreReason || undefined,
     })
