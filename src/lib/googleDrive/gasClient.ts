@@ -17,37 +17,51 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary)
 }
 
-/**
- * JSON + XLSX 둘 다 Drive의 대상자 폴더에 저장.
- * text/plain body → GAS e.postData.contents 로 수신.
- */
+/** 임시저장: JSON(임시저장/) + XLSX(대상자 폴더) 동시 저장 */
 export async function gasSaveWithExcel(
   session: ChecklistSession,
   xlsxBuffer: ArrayBuffer,
   xlsxFileName: string,
   subjectFolderName: string,
+  tempJsonFileName: string,
 ): Promise<void> {
   const xlsxBase64 = arrayBufferToBase64(xlsxBuffer)
   await fetch(GAS_URL, {
     method: 'POST',
     mode: 'no-cors',
     headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ session, xlsxBase64, xlsxFileName, subjectFolderName }),
+    body: JSON.stringify({ session, xlsxBase64, xlsxFileName, subjectFolderName, tempJsonFileName }),
   })
 }
 
-/** JSON만 임시저장 폴더에 저장 */
-export async function gasSaveSession(session: ChecklistSession): Promise<void> {
+/** JSON만 임시저장 폴더에 저장 (Excel 생성 실패 시 fallback) */
+export async function gasSaveSession(session: ChecklistSession, tempJsonFileName?: string): Promise<void> {
   await fetch(GAS_URL, {
     method: 'POST',
     mode: 'no-cors',
     headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ session, folderType: 'temp' }),
+    body: JSON.stringify({ session, folderType: 'temp', tempJsonFileName }),
   })
 }
 
-export async function gasListSessions(): Promise<SessionMeta[]> {
-  const res = await fetch(`${GAS_URL}?action=list`, { mode: 'cors' })
+/** 임시저장 파일 삭제 (최종제출 시 기존 임시저장 파기) */
+export async function gasDeleteTempFiles(
+  tempJsonFileName: string,
+  subjectFolderName: string,
+  tempXlsxFileName: string,
+): Promise<void> {
+  await fetch(GAS_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: 'deleteTemp', tempJsonFileName, subjectFolderName, tempXlsxFileName }),
+  })
+}
+
+/** 대상자 사번+주차로 필터링하여 임시저장 세션 목록 조회 */
+export async function gasListSessions(subjectEmployeeId: string, weekType: string): Promise<SessionMeta[]> {
+  const params = new URLSearchParams({ action: 'list', subjectId: subjectEmployeeId, weekType })
+  const res = await fetch(`${GAS_URL}?${params}`, { mode: 'cors' })
   if (!res.ok) throw new Error(`서버 오류: ${res.status}`)
   const json = await res.json() as { sessions?: SessionMeta[]; error?: string }
   if (json.error) throw new Error(json.error)

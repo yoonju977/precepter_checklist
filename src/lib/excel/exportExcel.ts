@@ -6,15 +6,33 @@ const SHEET_NAME: Record<string, string> = {
   '8week': '체크리스트(8주)(0~3점평가) (2)',
 }
 
-// 원본 엑셀의 열 인덱스 (1-based for ExcelJS)
+const COVER_SHEET = '표지(제출시 사용)'
+
 const COL = {
-  NUM: 1,            // A: 연번
-  CONTENT: 6,        // F: 교육 내용
-  SIGN_DATE: 8,      // H: 교육 실행일
-  SIGNER: 9,         // I: 교육자 서명
-  SELF_SCORE: 10,    // J: 자가평가
-  EVAL_SCORE: 11,    // K: 교육자 평가
+  NUM: 1,
+  CONTENT: 6,
+  SIGN_DATE: 8,
+  SIGNER: 9,
+  SELF_SCORE: 10,
+  EVAL_SCORE: 11,
 }
+
+// 집계 테이블 행 번호 (주차별)
+const SUMMARY_ROWS: Record<string, { score0: number; score1: number; score2: number; score3: number; total: number; grandTotal: number }> = {
+  '4week': { score0: 177, score1: 178, score2: 179, score3: 180, total: 181, grandTotal: 182 },
+  '8week': { score0: 101, score1: 102, score2: 103, score3: 104, total: 105, grandTotal: 106 },
+}
+
+// 집계 테이블 열 (1-based)
+const SUMMARY_COL = {
+  SELF_COUNT: 8,   // H: 자가평가 문항수
+  SELF_SCORE: 9,   // I: 자가평가 점수
+  EVAL_COUNT: 10,  // J: 교육자평가 문항수
+  EVAL_SCORE_COL: 11, // K: 교육자평가 점수
+}
+
+// 주차별 총 문항수
+const TOTAL_ITEMS: Record<string, number> = { '4week': 158, '8week': 82 }
 
 async function loadWorkbook(weekType: string): Promise<{ workbook: ExcelJS.Workbook; sheet: ExcelJS.Worksheet }> {
   const templateUrl = import.meta.env.BASE_URL + 'templates/checklist-template.xlsx'
@@ -34,13 +52,11 @@ async function loadWorkbook(weekType: string): Promise<{ workbook: ExcelJS.Workb
 function fillSheet(sheet: ExcelJS.Worksheet, session: ChecklistSession) {
   const { results, weekType } = session
 
-  // 결과 Map
   const resultMap = new Map(results.map(r => {
     const numStr = r.itemId.replace(`${weekType}_`, '')
     return [parseInt(numStr, 10), r]
   }))
 
-  // 데이터 행 순회 (17행부터)
   sheet.eachRow((row, rowNum) => {
     if (rowNum < 17) return
     const rawNum = row.getCell(COL.NUM).value
@@ -51,18 +67,14 @@ function fillSheet(sheet: ExcelJS.Worksheet, session: ChecklistSession) {
     const result = resultMap.get(num)
     if (!result) return
 
-    // 자가평가 점수
     if (result.preceptee.score !== null) {
       row.getCell(COL.SELF_SCORE).value = result.preceptee.score
     }
 
-    // 프리셉터 또는 교육전담 평가 점수 (어느 쪽이든 preceptor column에 씀)
     const evalResult = result.preceptor.score !== null ? result.preceptor : result.educator
     if (evalResult.score !== null) {
       row.getCell(COL.EVAL_SCORE).value = evalResult.score
-      // 서명자명: session의 preceptorName 사용
       row.getCell(COL.SIGNER).value = session.preceptorName || evalResult.signerName || ''
-      // 교육 실행일: per-item educationDate (preceptor 우선, educator fallback)
       const educationDate = result.preceptor.educationDate || result.educator.educationDate
       if (educationDate) {
         row.getCell(COL.SIGN_DATE).value = educationDate
@@ -73,8 +85,95 @@ function fillSheet(sheet: ExcelJS.Worksheet, session: ChecklistSession) {
   })
 }
 
+function fillCoverSheet(workbook: ExcelJS.Workbook, session: ChecklistSession) {
+  const cover = workbook.getWorksheet(COVER_SHEET)
+  if (!cover) return
+
+  // 신입간호사: row7, col3=사번, col4=성명
+  cover.getRow(7).getCell(3).value = session.employeeId || ''
+  cover.getRow(7).getCell(4).value = session.targetName || ''
+
+  // 프리셉터: row8, col3=사번, col4=성명
+  if (session.preceptorId || session.preceptorName) {
+    cover.getRow(8).getCell(3).value = session.preceptorId || ''
+    cover.getRow(8).getCell(4).value = session.preceptorName || ''
+  }
+
+  // 수간호사: row9, col4=성명
+  if (session.headNurseName) {
+    cover.getRow(9).getCell(4).value = session.headNurseName
+  }
+
+  // 부서: row11, col3
+  if (session.surveyMeta?.department) {
+    cover.getRow(11).getCell(3).value = session.surveyMeta.department
+  }
+
+  // 배치일: row12, col3
+  if (session.surveyMeta?.deploymentDate) {
+    cover.getRow(12).getCell(3).value = session.surveyMeta.deploymentDate
+  }
+}
+
+function fillSummaryTable(sheet: ExcelJS.Worksheet, session: ChecklistSession, isFinal: boolean) {
+  const { results, weekType } = session
+  const rows = SUMMARY_ROWS[weekType]
+  if (!rows) return
+
+  // 점수별 집계
+  const selfCount: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 }
+  const evalCount: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 }
+
+  for (const r of results) {
+    if (r.preceptee.score !== null) {
+      selfCount[r.preceptee.score] = (selfCount[r.preceptee.score] ?? 0) + 1
+    }
+    const evalScore = r.preceptor.score !== null ? r.preceptor.score
+      : r.educator.score !== null ? r.educator.score
+      : null
+    if (evalScore !== null) {
+      evalCount[evalScore] = (evalCount[evalScore] ?? 0) + 1
+    }
+  }
+
+  const scoreRowMap: Record<number, number> = {
+    0: rows.score0, 1: rows.score1, 2: rows.score2, 3: rows.score3,
+  }
+
+  // 0~3점 행 기입
+  for (let s = 0; s <= 3; s++) {
+    const rowNum = scoreRowMap[s]
+    const row = sheet.getRow(rowNum)
+    row.getCell(SUMMARY_COL.SELF_COUNT).value = selfCount[s] || 0
+    row.getCell(SUMMARY_COL.SELF_SCORE).value = (selfCount[s] || 0) * s
+    row.getCell(SUMMARY_COL.EVAL_COUNT).value = evalCount[s] || 0
+    row.getCell(SUMMARY_COL.EVAL_SCORE_COL).value = (evalCount[s] || 0) * s
+  }
+
+  // 합계 행
+  const totalSelfCount = Object.values(selfCount).reduce((a, b) => a + b, 0)
+  const totalSelfScore = Object.entries(selfCount).reduce((sum, [sc, cnt]) => sum + parseInt(sc) * cnt, 0)
+  const totalEvalCount = Object.values(evalCount).reduce((a, b) => a + b, 0)
+  const totalEvalScore = Object.entries(evalCount).reduce((sum, [sc, cnt]) => sum + parseInt(sc) * cnt, 0)
+
+  const totalRow = sheet.getRow(rows.total)
+  totalRow.getCell(SUMMARY_COL.SELF_COUNT).value = totalSelfCount
+  totalRow.getCell(SUMMARY_COL.SELF_SCORE).value = totalSelfScore
+  totalRow.getCell(SUMMARY_COL.EVAL_COUNT).value = totalEvalCount
+  totalRow.getCell(SUMMARY_COL.EVAL_SCORE_COL).value = totalEvalScore
+
+  // 총점 (최종제출 시만)
+  if (isFinal) {
+    const maxScore = TOTAL_ITEMS[weekType] * 3
+    const grandRow = sheet.getRow(rows.grandTotal)
+    const selfGrand = maxScore > 0 ? Math.round((totalSelfScore / maxScore) * 100 * 10) / 10 : 0
+    const evalGrand = maxScore > 0 ? Math.round((totalEvalScore / maxScore) * 100 * 10) / 10 : 0
+    grandRow.getCell(SUMMARY_COL.SELF_SCORE).value = selfGrand
+    grandRow.getCell(SUMMARY_COL.EVAL_SCORE_COL).value = evalGrand
+  }
+}
+
 function addSignatureImage(workbook: ExcelJS.Workbook, sheet: ExcelJS.Worksheet, session: ChecklistSession) {
-  // 프리셉터 서명 이미지 (프리셉터 문항 우선, 없으면 교육전담)
   const repSignImage = session.results.find(r => r.preceptor.signatureImage)?.preceptor.signatureImage
     ?? session.results.find(r => r.educator.signatureImage)?.educator.signatureImage
   if (repSignImage) {
@@ -85,21 +184,25 @@ function addSignatureImage(workbook: ExcelJS.Workbook, sheet: ExcelJS.Worksheet,
       ext: { width: 80, height: 30 },
     })
   }
-  // 수간호사 서명은 엑셀에 미포함 (수기로 처리)
 }
 
-/** 파일명 생성 */
 export function buildExcelFileName(session: ChecklistSession): string {
   const weekLabel = session.weekType === '4week' ? '4주' : '8주'
   const dateStr = new Date().toISOString().slice(0, 10)
   return `신규간호사_체크리스트_${weekLabel}_${session.targetName || ''}_${dateStr}.xlsx`
 }
 
-/** 브라우저에서 바로 다운로드 */
-export async function exportToExcel(session: ChecklistSession): Promise<void> {
-  const { workbook, sheet } = await loadWorkbook(session.weekType)
+export function buildTempExcelFileName(session: ChecklistSession, role: string, evaluatorId: string): string {
+  const weekLabel = session.weekType === '4week' ? '4주' : '8주'
+  const roleLabel = role === 'preceptee' ? '프리셉티' : role === 'preceptor' ? '프리셉터' : role === 'educator' ? '교육전담' : '수간호사'
+  return `체크리스트_${weekLabel}_${session.employeeId || ''}_${session.targetName || ''}_${roleLabel}_${evaluatorId}_임시저장.xlsx`
+}
 
+export async function exportToExcel(session: ChecklistSession, isFinal = false): Promise<void> {
+  const { workbook, sheet } = await loadWorkbook(session.weekType)
+  fillCoverSheet(workbook, session)
   fillSheet(sheet, session)
+  fillSummaryTable(sheet, session, isFinal)
   addSignatureImage(workbook, sheet, session)
 
   const buffer = await workbook.xlsx.writeBuffer()
@@ -112,11 +215,11 @@ export async function exportToExcel(session: ChecklistSession): Promise<void> {
   URL.revokeObjectURL(url)
 }
 
-/** 브라우저 다운로드 없이 ArrayBuffer + 파일명만 반환 (서버 업로드용) */
-export async function buildExcelBuffer(session: ChecklistSession): Promise<{ buffer: ArrayBuffer; fileName: string }> {
+export async function buildExcelBuffer(session: ChecklistSession, isFinal = false): Promise<{ buffer: ArrayBuffer; fileName: string }> {
   const { workbook, sheet } = await loadWorkbook(session.weekType)
-
+  fillCoverSheet(workbook, session)
   fillSheet(sheet, session)
+  fillSummaryTable(sheet, session, isFinal)
   addSignatureImage(workbook, sheet, session)
 
   const buffer = await workbook.xlsx.writeBuffer()

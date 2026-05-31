@@ -31,7 +31,6 @@ export default function ChecklistCard({ item, result, role, isLocked, onScoreCha
     : role === 'educator' ? 'educator'
     : 'headNurse']
 
-  const precepteeEval = result.preceptee
   const preceptorEval = result.preceptor
   const educatorEval = result.educator
 
@@ -60,18 +59,6 @@ export default function ChecklistCard({ item, result, role, isLocked, onScoreCha
         </div>
         {isLocked && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded shrink-0">평가완료</span>}
       </div>
-
-      {/* 자가평가 열람 (프리셉터·교육전담·수간호사) */}
-      {role !== 'preceptee' && (
-        <div className="bg-gray-50 rounded-lg p-3 mb-3 text-xs">
-          <p className="text-gray-400 mb-1">자가평가</p>
-          <div className="flex items-center gap-3">
-            <span className={`font-semibold ${precepteeEval.score !== null ? 'text-gray-800' : 'text-gray-300'}`}>
-              {precepteeEval.score !== null ? `${precepteeEval.score}점` : '미입력'}
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* 프리셉터 평가 열람 (수간호사) */}
       {role === 'headNurse' && item.evaluatorType === 'preceptor' && (

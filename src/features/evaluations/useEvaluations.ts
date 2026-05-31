@@ -43,14 +43,15 @@ type EvaluatorMeta = {
 type Options = {
   weekType: WeekType
   targetName?: string
+  subjectEmployeeId?: string
 }
 
 export function useEvaluations(items: ChecklistItem[], options: Options) {
-  const { weekType, targetName = '' } = options
+  const { weekType, targetName = '', subjectEmployeeId } = options
 
   const savedRef = useRef<ChecklistSession | null>(null)
   if (savedRef.current === null) {
-    savedRef.current = loadSession(weekType)
+    savedRef.current = loadSession(weekType, subjectEmployeeId)
   }
   const saved = savedRef.current
 
@@ -78,6 +79,7 @@ export function useEvaluations(items: ChecklistItem[], options: Options) {
       const session: ChecklistSession = {
         id: `${weekType}_${Date.now()}`,
         targetName,
+        employeeId: subjectEmployeeId,
         weekType,
         department: surveyMeta.department,
         startDate: surveyMeta.deploymentDate,

@@ -2,23 +2,25 @@ import type { ChecklistSession } from '../../types/evaluation'
 
 const PREFIX = 'checklist_'
 
-export function saveSession(session: ChecklistSession) {
-  try {
-    localStorage.setItem(PREFIX + session.weekType, JSON.stringify(session))
-  } catch {
-    // storage quota 초과 시 무시
-  }
+function makeKey(weekType: string, employeeId?: string) {
+  return PREFIX + weekType + (employeeId ? '_' + employeeId : '')
 }
 
-export function loadSession(weekType: string): ChecklistSession | null {
+export function saveSession(session: ChecklistSession) {
   try {
-    const raw = localStorage.getItem(PREFIX + weekType)
+    localStorage.setItem(makeKey(session.weekType, session.employeeId), JSON.stringify(session))
+  } catch {}
+}
+
+export function loadSession(weekType: string, employeeId?: string): ChecklistSession | null {
+  try {
+    const raw = localStorage.getItem(makeKey(weekType, employeeId))
     return raw ? (JSON.parse(raw) as ChecklistSession) : null
   } catch {
     return null
   }
 }
 
-export function clearSession(weekType: string) {
-  localStorage.removeItem(PREFIX + weekType)
+export function clearSession(weekType: string, employeeId?: string) {
+  localStorage.removeItem(makeKey(weekType, employeeId))
 }
