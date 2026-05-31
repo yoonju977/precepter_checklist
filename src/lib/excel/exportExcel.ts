@@ -293,6 +293,8 @@ function addSignatureImage(workbook: ExcelJS.Workbook, sheet: ExcelJS.Worksheet,
   }
 }
 
+export { buildUnifiedFileName } from './fileNames'
+
 export function buildExcelFileName(session: ChecklistSession): string {
   const weekLabel = session.weekType === '4week' ? '4주' : '8주'
   const dateStr = new Date().toISOString().slice(0, 10)
