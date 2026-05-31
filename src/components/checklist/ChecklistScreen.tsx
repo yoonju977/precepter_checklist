@@ -4,7 +4,7 @@ import { useEvaluations } from '../../features/evaluations/useEvaluations'
 import { getChecklist } from '../../data/checklistData'
 import { ROLE_LABELS } from '../../types/userRole'
 import type { ChecklistSession } from '../../types/evaluation'
-import { gasSaveWithExcel, gasSaveSession, gasListSessions, gasLoadSession, gasDeleteTempFiles } from '../../lib/googleDrive/gasClient'
+import { gasSaveWithExcel, gasSaveSession, gasListSessions, gasLoadSession, gasDeleteTempFiles, gasSaveSignatureImage } from '../../lib/googleDrive/gasClient'
 import type { SessionMeta } from '../../lib/googleDrive/gasClient'
 import ChecklistCard from './ChecklistCard'
 import LowScoreModal from '../common/LowScoreModal'
@@ -37,6 +37,8 @@ export default function ChecklistScreen() {
     evaluatorMeta,
     updateEvaluatorMeta,
   } = useEvaluations(allItems, { weekType, targetName: subject.name, subjectEmployeeId: subject.employeeId })
+
+  const [bulkDate, setBulkDate] = useState('')
 
   const [showLowScore, setShowLowScore] = useState(false)
   const [pendingScore, setPendingScore] = useState(0)
@@ -93,6 +95,14 @@ export default function ChecklistScreen() {
     : (evaluatorInfo?.name || '')
 
   const roleLabel = role === 'preceptee' ? '프리셉티' : role === 'preceptor' ? '프리셉터' : role === 'educator' ? '교육전담' : '수간호사'
+
+  function handleBulkDateChange(date: string) {
+    setBulkDate(date)
+    if (!date) return
+    allItems.forEach(item => {
+      updateEvaluation(item.id, 'preceptee', { educationDate: date })
+    })
+  }
 
   function buildTempJsonFileName(): string {
     return `체크리스트_${weekType === '4week' ? '4주' : '8주'}_${subject.employeeId || ''}_${subject.name}_${roleLabel}_${currentEvaluatorId}.json`
@@ -228,6 +238,14 @@ export default function ChecklistScreen() {
     const now = new Date().toISOString()
     const name = signerName.trim()
 
+    // 서명 이미지 Drive 저장 (fire-and-forget)
+    const sigBase64 = dataUrl.split(',')[1]
+    const sigEmployeeId = role === 'preceptee' ? (subject.employeeId || '')
+      : role === 'preceptor' ? (evaluatorInfo?.employeeId || '')
+      : role === 'educator' ? (evaluatorInfo?.employeeId || '')
+      : ''
+    gasSaveSignatureImage(sigBase64, name, sigEmployeeId).catch(() => {})
+
     if (signMode === 'submit') {
       visibleItems.forEach(item => {
         const r = getResult(item.id)
@@ -351,6 +369,16 @@ export default function ChecklistScreen() {
                     onChange={e => updateSurveyMeta({ deploymentDate: e.target.value })}
                     className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">교육 실행일 (전체 일괄 적용)</label>
+                  <input
+                    type="date"
+                    value={bulkDate}
+                    onChange={e => handleBulkDateChange(e.target.value)}
+                    className="w-full border border-blue-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                  <p className="text-xs text-gray-400 mt-0.5">날짜 선택 시 전 문항에 일괄 적용 · 각 문항에서 개별 수정 가능</p>
                 </div>
               </div>
             )}

@@ -26,13 +26,16 @@ const DIFFICULTY_COLOR: Record<string, string> = {
 }
 
 export default function ChecklistCard({ item, result, role, isLocked, onScoreChange, onEvaluationPatch }: Props) {
-  const myEval = result[role === 'preceptee' ? 'preceptee'
+  const roleField = role === 'preceptee' ? 'preceptee'
     : role === 'preceptor' ? 'preceptor'
     : role === 'educator' ? 'educator'
-    : 'headNurse']
+    : 'headNurse'
+  const myEval = result[roleField]
 
-  const preceptorEval = result.preceptor
-  const educatorEval = result.educator
+  const educatorEval = item.evaluatorType === 'preceptor' ? result.preceptor : result.educator
+
+  // 교육자 날짜: 프리셉티 입력 우선, 없으면 해당 교육자 입력값
+  const educatorDatePlaceholder = result.preceptee.educationDate
 
   return (
     <div className={[
@@ -60,27 +63,31 @@ export default function ChecklistCard({ item, result, role, isLocked, onScoreCha
         {isLocked && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded shrink-0">평가완료</span>}
       </div>
 
-      {/* 프리셉터 평가 열람 (수간호사) */}
-      {role === 'headNurse' && item.evaluatorType === 'preceptor' && (
-        <div className="bg-green-50 rounded-lg p-3 mb-3 text-xs">
-          <p className="text-green-600 mb-1">프리셉터 평가{preceptorEval.signerName && ` — ${preceptorEval.signerName}`}</p>
+      {/* 자가평가 점수 열람 (교육자·수간호사 — 프리셉티가 입력한 경우) */}
+      {role !== 'preceptee' && result.preceptee.score !== null && (
+        <div className="bg-blue-50 rounded-lg p-2.5 mb-3 text-xs">
+          <p className="text-blue-500 font-medium mb-1">자가평가</p>
           <div className="flex items-center gap-3">
-            <span className={`font-semibold ${preceptorEval.score !== null ? 'text-gray-800' : 'text-gray-300'}`}>
-              {preceptorEval.score !== null ? `${preceptorEval.score}점` : '미입력'}
-            </span>
-            {preceptorEval.educationDate && <span className="text-gray-500">교육일: {preceptorEval.educationDate}</span>}
+            <span className="font-semibold text-gray-800">{result.preceptee.score}점</span>
+            {result.preceptee.educationDate && (
+              <span className="text-gray-500">교육일: {result.preceptee.educationDate}</span>
+            )}
           </div>
         </div>
       )}
 
-      {/* 교육전담 평가 열람 (수간호사) */}
-      {role === 'headNurse' && item.evaluatorType === 'educator' && (
-        <div className="bg-yellow-50 rounded-lg p-3 mb-3 text-xs">
-          <p className="text-yellow-600 mb-1">교육전담 평가{educatorEval.signerName && ` — ${educatorEval.signerName}`}</p>
+      {/* 교육자 평가 열람 (수간호사) */}
+      {role === 'headNurse' && educatorEval.score !== null && (
+        <div className={`rounded-lg p-2.5 mb-3 text-xs ${item.evaluatorType === 'preceptor' ? 'bg-green-50' : 'bg-yellow-50'}`}>
+          <p className={`font-medium mb-1 ${item.evaluatorType === 'preceptor' ? 'text-green-600' : 'text-yellow-600'}`}>
+            {item.evaluatorType === 'preceptor' ? '프리셉터' : '교육전담'} 평가
+            {educatorEval.signerName && ` — ${educatorEval.signerName}`}
+          </p>
           <div className="flex items-center gap-3">
-            <span className={`font-semibold ${educatorEval.score !== null ? 'text-gray-800' : 'text-gray-300'}`}>
-              {educatorEval.score !== null ? `${educatorEval.score}점` : '미입력'}
-            </span>
+            <span className="font-semibold text-gray-800">{educatorEval.score}점</span>
+            {educatorEval.educationDate && (
+              <span className="text-gray-500">교육일: {educatorEval.educationDate}</span>
+            )}
           </div>
         </div>
       )}
@@ -90,17 +97,22 @@ export default function ChecklistCard({ item, result, role, isLocked, onScoreCha
         <p className="text-xs text-gray-400 mb-2">{ROLE_LABEL[role]}</p>
         <ScoreInput value={myEval.score} onChange={onScoreChange} disabled={isLocked} />
 
-        {/* 교육 실행일 (프리셉터 역할만) */}
-        {role === 'preceptor' && (
+        {/* 교육실행일 입력 (프리셉티·프리셉터·교육전담) */}
+        {(role === 'preceptee' || role === 'preceptor' || role === 'educator') && (
           <div className="mt-2">
             <label className="block text-xs text-gray-400 mb-1">교육 실행일</label>
             <input
               type="date"
               value={myEval.educationDate}
+              placeholder={role !== 'preceptee' ? educatorDatePlaceholder : undefined}
               disabled={isLocked}
               onChange={e => onEvaluationPatch({ educationDate: e.target.value })}
               className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 disabled:opacity-40"
             />
+            {/* 교육자 화면: 프리셉티 입력 날짜 힌트 */}
+            {role !== 'preceptee' && !myEval.educationDate && educatorDatePlaceholder && (
+              <p className="text-xs text-blue-400 mt-0.5">대상자 입력: {educatorDatePlaceholder}</p>
+            )}
           </div>
         )}
       </div>

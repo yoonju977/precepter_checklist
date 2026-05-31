@@ -75,3 +75,17 @@ export async function gasLoadSession(fileId: string): Promise<ChecklistSession> 
   if ('error' in json && json.error) throw new Error(json.error)
   return json
 }
+
+/** 서명 이미지 PNG를 Drive 전자서명 폴더에 저장 (fire-and-forget) */
+export async function gasSaveSignatureImage(
+  base64: string,
+  name: string,
+  employeeId: string,
+): Promise<void> {
+  await fetch(GAS_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: 'saveSignature', base64, name, employeeId }),
+  })
+}
