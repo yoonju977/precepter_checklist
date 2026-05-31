@@ -10,25 +10,35 @@ export default function LowScoreModal({ score, onConfirm, onCancel }: Props) {
   const [reason, setReason] = useState('')
 
   return (
-    <div className="scrim scrim--center">
-      <div className="modal">
-        <h3 className="modal__title" style={{ color: 'var(--danger)' }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-          70점 미만 경고
-        </h3>
-        <p className="modal__body" style={{ marginBottom: 12 }}>
-          최종 점수가 <b className="t-num" style={{ color: 'var(--danger)' }}>{score.toFixed(1)}점</b>으로 70점 미만입니다.
-          그래도 해당 점수로 저장하시겠습니까?
-        </p>
-        <div className="field" style={{ marginBottom: 4 }}>
-          <label>저장 사유 (선택)</label>
-          <input value={reason} onChange={e => setReason(e.target.value)} placeholder="예) 재교육 예정, 추가 평가 필요 등" />
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-6">
+        <div className="text-center mb-4">
+          <div className="text-4xl mb-2">⚠️</div>
+          <h2 className="text-base font-bold text-gray-800">최종 점수가 70점 미만입니다</h2>
+          <p className="text-sm text-gray-500 mt-1">현재 평균 점수: <span className="font-semibold text-red-500">{score.toFixed(1)}점</span></p>
         </div>
-        <div className="modal__actions">
-          <button className="btn btn--secondary" onClick={onCancel}>돌아가서 수정</button>
-          <button className="btn btn--primary" onClick={() => onConfirm(reason)}>최종 제출</button>
+
+        <textarea
+          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:border-blue-400 mb-4"
+          rows={3}
+          placeholder="저장 사유를 입력하세요 (선택)"
+          value={reason}
+          onChange={e => setReason(e.target.value)}
+        />
+
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={onCancel}
+            className="w-full border border-gray-200 rounded-xl py-2.5 text-sm text-gray-700 font-medium hover:bg-gray-50"
+          >
+            돌아가서 수정하기
+          </button>
+          <button
+            onClick={() => onConfirm(reason)}
+            className="w-full bg-red-500 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-red-600"
+          >
+            그래도 저장하기
+          </button>
         </div>
       </div>
     </div>

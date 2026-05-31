@@ -1,54 +1,40 @@
 import { useAppContext } from '../../features/checklist/ChecklistContext'
 import type { Role } from '../../types/userRole'
 import { ROLE_LABELS } from '../../types/userRole'
-import Header from '../common/Header'
 
-const ROLES: {
-  role: Role
-  desc: string
-  tone: string
-  iconColor: string
-  icon: string
-}[] = [
-  { role: 'preceptee', desc: '자가평가 점수 입력', tone: 'self', iconColor: 'var(--role-self-bg)', icon: '👤' },
-  { role: 'preceptor', desc: '프리셉티 자가평가 확인 + 평가 입력', tone: 'preceptor', iconColor: 'var(--role-preceptor-bg)', icon: '👥' },
-  { role: 'educator',  desc: '교육전담 담당 문항 평가 입력', tone: 'educator', iconColor: 'var(--role-educator-bg)', icon: '🎓' },
-  { role: 'headNurse', desc: '전체 평가 확인 + 최종 평가 입력', tone: 'head', iconColor: 'var(--role-head-bg)', icon: '🏥' },
+const ROLES: { role: Role; desc: string; color: string }[] = [
+  { role: 'preceptee', desc: '자가평가 점수 입력', color: 'bg-blue-50 border-blue-300 hover:bg-blue-100' },
+  { role: 'preceptor', desc: '프리셉티 자가평가 확인 + 평가 입력', color: 'bg-green-50 border-green-300 hover:bg-green-100' },
+  { role: 'educator', desc: '교육전담 담당 문항 평가 입력', color: 'bg-yellow-50 border-yellow-300 hover:bg-yellow-100' },
+  { role: 'headNurse', desc: '전체 평가 확인 + 최종 평가 입력', color: 'bg-purple-50 border-purple-300 hover:bg-purple-100' },
 ]
 
-const ICON_FG: Record<string, string> = {
-  self: 'var(--role-self-fg)',
-  preceptor: 'var(--role-preceptor-fg)',
-  educator: 'var(--role-educator-fg)',
-  head: 'var(--role-head-fg)',
-}
-
 export default function RoleSelectScreen() {
-  const { setRole, subject, reset } = useAppContext()
+  const { setRole, subject } = useAppContext()
 
   return (
-    <>
-      <Header
-        title="역할 선택"
-        sub={`대상: ${subject.name} (${subject.employeeId})`}
-        onBack={reset}
-      />
-      <div className="screen">
-        <h1 className="screen__title">역할을 선택하세요</h1>
-        <p className="screen__lead">선택한 역할에 따라 보이는 문항과 입력 항목이 달라집니다.</p>
-        {ROLES.map(({ role, desc, tone, iconColor, icon }) => (
-          <button key={role} className="choice" onClick={() => setRole(role)}>
-            <span className="choice__icon" style={{ background: iconColor, color: ICON_FG[tone] }}>
-              {icon}
-            </span>
-            <span className="choice__body">
-              <span className="choice__name">{ROLE_LABELS[role]}</span>
-              <span className="choice__desc">{desc}</span>
-            </span>
-            <span className="choice__chev">›</span>
-          </button>
-        ))}
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <h1 className="text-2xl font-bold text-gray-800 text-center mb-2">신규간호사 체크리스트</h1>
+        <p className="text-sm text-gray-500 text-center mb-1">
+          대상자: <span className="font-medium text-gray-700">{subject.name}</span>
+          {subject.employeeId && <span className="text-gray-400"> ({subject.employeeId})</span>}
+        </p>
+        <p className="text-sm text-gray-500 text-center mb-8">역할을 선택하세요</p>
+
+        <div className="flex flex-col gap-3">
+          {ROLES.map(({ role, desc, color }) => (
+            <button
+              key={role}
+              onClick={() => setRole(role)}
+              className={`border-2 rounded-xl px-5 py-4 text-left transition-colors ${color}`}
+            >
+              <p className="font-semibold text-gray-800 text-base">{ROLE_LABELS[role]}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+            </button>
+          ))}
+        </div>
       </div>
-    </>
+    </div>
   )
 }

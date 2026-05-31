@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { useAppContext } from '../../features/checklist/ChecklistContext'
 import type { SubjectInfo } from '../../features/checklist/ChecklistContext'
-import Header from '../common/Header'
 
 export default function SubjectInfoScreen() {
   const { setSubject } = useAppContext()
 
-  const [form, setForm] = useState<SubjectInfo>({ employeeId: '', name: '' })
+  const [form, setForm] = useState<SubjectInfo>({
+    employeeId: '',
+    name: '',
+  })
+
   const [errors, setErrors] = useState<Partial<Record<keyof SubjectInfo, string>>>({})
 
   function handleSubmit(e: React.FormEvent) {
@@ -19,33 +22,50 @@ export default function SubjectInfoScreen() {
     setSubject(trimmed)
   }
 
-  const set = (k: keyof SubjectInfo) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm(f => ({ ...f, [k]: e.target.value }))
-    setErrors(er => ({ ...er, [k]: undefined }))
-  }
+  const field = (
+    key: keyof SubjectInfo,
+    label: string,
+    placeholder: string,
+  ) => (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}<span className="text-red-500 ml-0.5">*</span>
+      </label>
+      <input
+        type="text"
+        value={form[key]}
+        onChange={e => {
+          setForm(f => ({ ...f, [key]: e.target.value }))
+          setErrors(er => ({ ...er, [key]: undefined }))
+        }}
+        placeholder={placeholder}
+        className={[
+          'w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400',
+          errors[key] ? 'border-red-400' : 'border-gray-200',
+        ].join(' ')}
+      />
+      {errors[key] && <p className="text-xs text-red-500 mt-1">{errors[key]}</p>}
+    </div>
+  )
 
   return (
-    <>
-      <Header title="신규간호사 체크리스트" sub="고려대학교 구로병원" />
-      <div className="screen">
-        <h1 className="screen__title">신규간호사 정보</h1>
-        <p className="screen__lead">평가 대상 신규간호사의 <b>사번</b>과 <b>성명</b>을 입력하세요.</p>
-        <form className="panel" onSubmit={handleSubmit}>
-          <div className="field">
-            <label>사번<span className="req">*</span></label>
-            <input className={errors.employeeId ? 'err' : ''} value={form.employeeId}
-              onChange={set('employeeId')} placeholder="예) 12345" inputMode="numeric" />
-            {errors.employeeId && <div className="errmsg">{errors.employeeId}</div>}
-          </div>
-          <div className="field">
-            <label>성명 (신규간호사)<span className="req">*</span></label>
-            <input className={errors.name ? 'err' : ''} value={form.name}
-              onChange={set('name')} placeholder="홍길동" />
-            {errors.name && <div className="errmsg">{errors.name}</div>}
-          </div>
-          <button type="submit" className="btn btn--primary btn--block" style={{ marginTop: 6 }}>다음</button>
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <h1 className="text-xl font-bold text-gray-800 mb-1">신규간호사 정보 입력</h1>
+        <p className="text-sm text-gray-500 mb-6">신규간호사의 사번과 성명을 입력하세요</p>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          {field('employeeId', '사번', '예) 12345')}
+          {field('name', '성명 (신규간호사)', '홍길동')}
+
+          <button
+            type="submit"
+            className="w-full bg-blue-600 text-white rounded-xl py-3 text-sm font-semibold hover:bg-blue-700 mt-2"
+          >
+            다음
+          </button>
         </form>
       </div>
-    </>
+    </div>
   )
 }

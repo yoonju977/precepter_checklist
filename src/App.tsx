@@ -18,9 +18,7 @@ function AppInner() {
 export default function App() {
   return (
     <AppProvider>
-      <div className="app-shell">
-        <AppInner />
-      </div>
+      <AppInner />
     </AppProvider>
   )
 }

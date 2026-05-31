@@ -5,24 +5,24 @@ type Props = {
 
 export default function UnansweredModal({ itemNums, onClose }: Props) {
   return (
-    <div className="scrim scrim--center">
-      <div className="modal">
-        <h3 className="modal__title" style={{ color: 'var(--danger)' }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-          미답변 문항이 있습니다
-        </h3>
-        <p className="modal__body">
-          아래 문항에 점수를 입력해야 최종 제출할 수 있습니다.<br />
-          <span className="t-num" style={{ fontWeight: 700, color: 'var(--ink-900)' }}>
-            #{itemNums.slice(0, 12).join(', #')}{itemNums.length > 12 ? ' …' : ''}
-          </span>
-          <span style={{ display: 'block', marginTop: 6, color: 'var(--ink-500)' }}>총 {itemNums.length}개 문항 미입력</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <p className="text-base font-bold text-red-600 mb-2 text-center">미답변 문항이 있습니다</p>
+        <p className="text-xs text-gray-500 text-center mb-4">
+          모든 문항에 점수를 입력해야 최종 제출이 가능합니다.
         </p>
-        <div className="modal__actions">
-          <button className="btn btn--primary btn--block" onClick={onClose}>확인</button>
+        <div className="bg-red-50 rounded-xl p-3 mb-5 max-h-40 overflow-y-auto">
+          <p className="text-xs text-red-700 font-medium mb-1">미답변 문항 번호</p>
+          <p className="text-sm text-red-800 leading-relaxed">
+            {itemNums.join(', ')}
+          </p>
         </div>
+        <button
+          onClick={onClose}
+          className="w-full py-2.5 rounded-xl bg-gray-800 text-sm text-white font-medium hover:bg-gray-900"
+        >
+          확인 (수정하러 가기)
+        </button>
       </div>
     </div>
   )

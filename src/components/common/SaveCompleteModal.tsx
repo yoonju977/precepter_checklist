@@ -4,19 +4,28 @@ type Props = {
 }
 
 export default function SaveCompleteModal({ onGoHome, onContinue }: Props) {
+  const now = new Date()
+  const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+
   return (
-    <div className="scrim scrim--center">
-      <div className="modal">
-        <h3 className="modal__title" style={{ color: 'var(--success)' }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
-          </svg>
-          저장 완료
-        </h3>
-        <p className="modal__body">임시저장이 완료되었습니다. Google Drive에 작업 내용이 안전하게 저장되었어요.</p>
-        <div className="modal__actions">
-          <button className="btn btn--secondary" onClick={onGoHome}>처음으로</button>
-          <button className="btn btn--primary" onClick={onContinue}>계속 작업</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">
+        <div className="text-3xl mb-2">✅</div>
+        <p className="text-base font-bold text-gray-800 mb-1">임시저장 완료</p>
+        <p className="text-xs text-gray-400 mb-6">{timeStr} 저장됨</p>
+        <div className="flex gap-3">
+          <button
+            onClick={onGoHome}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            처음으로
+          </button>
+          <button
+            onClick={onContinue}
+            className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-sm text-white font-medium hover:bg-indigo-700"
+          >
+            계속 작업
+          </button>
         </div>
       </div>
     </div>
