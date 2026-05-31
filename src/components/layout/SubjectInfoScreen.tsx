@@ -55,12 +55,12 @@ export default function SubjectInfoScreen() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-md">
-        <h1 className="text-xl font-bold text-gray-800 mb-1">신입간호사 정보 입력</h1>
-        <p className="text-sm text-gray-500 mb-6">신규 간호사의 사번과 성명을 입력하세요</p>
+        <h1 className="text-xl font-bold text-gray-800 mb-1">신규간호사 정보 입력</h1>
+        <p className="text-sm text-gray-500 mb-6">신규간호사의 사번과 성명을 입력하세요</p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           {field('employeeId', '사번', '예) 12345')}
-          {field('name', '성명 (신입간호사)', '홍길동')}
+          {field('name', '성명 (신규간호사)', '홍길동')}
 
           <button
             type="submit"

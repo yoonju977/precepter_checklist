@@ -10,6 +10,10 @@ CLAUDE.md
 # Google Apps Script
 gas/
 
+# Local-only docs (design plans, test scenarios)
+docs/ui-디자인계획.md
+docs/기능테스트시나리오.md
+
 # Export / generated files
 public/data/*.csv
 
