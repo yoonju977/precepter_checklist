@@ -14,6 +14,7 @@ import SaveCompleteModal from '../common/SaveCompleteModal'
 import SavingModal from '../common/SavingModal'
 import FinalSubmitModal from '../common/FinalSubmitModal'
 import UnansweredModal from '../common/UnansweredModal'
+import Header from '../common/Header'
 import { buildUnifiedFileName } from '../../lib/excel/fileNames'
 
 export default function ChecklistScreen() {
@@ -29,6 +30,17 @@ export default function ChecklistScreen() {
     if (role === 'preceptor') return allItems.filter(i => i.evaluatorType === 'preceptor')
     return allItems
   }, [allItems, role])
+
+  // Group visible items by category
+  const groups = useMemo(() => {
+    const out: { cat: string; items: typeof visibleItems }[] = []
+    const idx: Record<string, number> = {}
+    visibleItems.forEach(item => {
+      if (idx[item.category] == null) { idx[item.category] = out.length; out.push({ cat: item.category, items: [] }) }
+      out[idx[item.category]].items.push(item)
+    })
+    return out
+  }, [visibleItems])
 
   const {
     results,
@@ -64,6 +76,9 @@ export default function ChecklistScreen() {
   const [showUnanswered, setShowUnanswered] = useState(false)
   const [unansweredNums, setUnansweredNums] = useState<number[]>([])
 
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const roleField = role === 'preceptee' ? 'preceptee'
     : role === 'preceptor' ? 'preceptor'
     : role === 'educator' ? 'educator'
@@ -91,7 +106,6 @@ export default function ChecklistScreen() {
     return (avg / 3) * 100
   }, [results, role])
 
-  // 교육자 평가 총점 백분율 (최종제출 확인용)
   const evalScorePct = useMemo(() => {
     if (role === 'preceptee') return null
     const maxScore = visibleItems.length * 3
@@ -106,7 +120,6 @@ export default function ChecklistScreen() {
     })
   }, [results, visibleItems, roleField, getResult])
 
-  // 기존 서명 이미지 (재사용용)
   const existingSignature = useMemo(() => {
     for (const r of results) {
       const ev = r[roleField as keyof typeof r] as { signatureImage?: string | null }
@@ -118,12 +131,15 @@ export default function ChecklistScreen() {
   const isSubmitted = submittedRoles[role] != null
 
   const currentEvaluatorId = role === 'preceptee' ? (subject.employeeId || '')
-    : role === 'preceptor' ? (evaluatorInfo?.employeeId || '')
-    : role === 'educator' ? (evaluatorInfo?.employeeId || '')
     : (evaluatorInfo?.employeeId || '')
-
   const currentEvaluatorName = role === 'preceptee' ? (subject.name || '')
     : (evaluatorInfo?.name || '')
+
+  function flashToast(msg: string) {
+    setToast(msg)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2600)
+  }
 
   function buildFileNames() {
     const base = {
@@ -142,9 +158,7 @@ export default function ChecklistScreen() {
   }
 
   function buildSubjectFolderName(): string {
-    const emp = (subject.employeeId || '').trim()
-    const nm = (subject.name || '').trim()
-    return `${emp}_${nm}`
+    return `${(subject.employeeId || '').trim()}_${(subject.name || '').trim()}`
   }
 
   function buildSession(extra?: Partial<ChecklistSession>): ChecklistSession {
@@ -172,12 +186,9 @@ export default function ChecklistScreen() {
   function handleBulkDateChange(date: string) {
     setBulkDate(date)
     if (!date) return
-    allItems.forEach(item => {
-      updateEvaluation(item.id, 'preceptee', { educationDate: date })
-    })
+    allItems.forEach(item => updateEvaluation(item.id, 'preceptee', { educationDate: date }))
   }
 
-  // B안: 첫 점수 입력 시 미채점 전 문항 일괄 적용
   function handleScoreChange(itemId: string, score: number) {
     const hasAnyScore = visibleItems.some(item => {
       const r = getResult(item.id)
@@ -185,15 +196,13 @@ export default function ChecklistScreen() {
     })
     if (!hasAnyScore && !bulkScoreApplied.current) {
       bulkScoreApplied.current = true
-      visibleItems.forEach(item => {
-        updateEvaluation(item.id, role, { score })
-      })
+      visibleItems.forEach(item => updateEvaluation(item.id, role, { score }))
+      flashToast(`전체 ${visibleItems.length}개 문항에 ${score}점을 적용했어요 · 개별 수정 가능`)
     } else {
       updateEvaluation(itemId, role, { score })
     }
   }
 
-  /** 임시저장(서버) */
   async function handleServerSave() {
     if (doneCount > 0 && !hasSigned) {
       alert('전자서명을 먼저 완료해주세요.')
@@ -222,7 +231,6 @@ export default function ChecklistScreen() {
     }
   }
 
-  /** 최종제출 XLSX + JSON → subject 폴더, 임시 파일 파기 */
   async function handleServerSaveWithExcel(sessionWithFinal: ChecklistSession) {
     const subjectFolderName = buildSubjectFolderName()
     const { tempJson, tempXlsx, finalXlsx } = buildFileNames()
@@ -269,17 +277,9 @@ export default function ChecklistScreen() {
       alert('전자서명을 먼저 완료해주세요.')
       return
     }
-
-    // 미답변 문항 체크 (블록)
     const unanswered = visibleItems
-      .filter(item => {
-        const r = getResult(item.id)
-        return !r || r[roleField].score === null
-      })
-      .map(item => {
-        const numStr = item.id.replace(`${weekType}_`, '')
-        return parseInt(numStr, 10)
-      })
+      .filter(item => { const r = getResult(item.id); return !r || r[roleField].score === null })
+      .map(item => parseInt(item.id.replace(`${weekType}_`, ''), 10))
       .filter(n => !isNaN(n))
       .sort((a, b) => a - b)
 
@@ -288,17 +288,10 @@ export default function ChecklistScreen() {
       setShowUnanswered(true)
       return
     }
-
-    // 수간호사 70점 미만 체크
     if (role === 'headNurse') {
       const score = headNurseAvgScore ?? 0
-      if (score < 70) {
-        setPendingScore(score)
-        setShowLowScore(true)
-        return
-      }
+      if (score < 70) { setPendingScore(score); setShowLowScore(true); return }
     }
-
     setShowFinalSubmit(true)
   }
 
@@ -312,8 +305,6 @@ export default function ChecklistScreen() {
     setShowFinalSubmit(false)
     const now = new Date().toISOString()
     const name = signerName.trim() || currentEvaluatorName
-
-    // 기존 서명 재사용 or 새 서명 필요
     if (existingSignature) {
       await applySignatureAndSubmit(existingSignature, now, name)
     } else {
@@ -322,8 +313,6 @@ export default function ChecklistScreen() {
   }
 
   async function applySignatureAndSubmit(dataUrl: string, now: string, name: string) {
-    // React state 업데이트 전에 buildSession이 호출되는 stale state 문제 방지:
-    // 업데이트된 results를 직접 계산해서 finalSession에 전달
     const updatedResults = results.map(r => {
       const ev = r[roleField]
       if (ev.score !== null) {
@@ -331,8 +320,6 @@ export default function ChecklistScreen() {
       }
       return r
     })
-
-    // UI 및 LocalStorage 자동저장용 상태 업데이트
     visibleItems.forEach(item => {
       const r = getResult(item.id)
       if (r && r[roleField].score !== null) {
@@ -340,7 +327,6 @@ export default function ChecklistScreen() {
       }
     })
     submitRole(role)
-
     const finalSession = buildSession({
       results: updatedResults,
       submittedRoles: { ...submittedRoles, [role]: now },
@@ -353,11 +339,8 @@ export default function ChecklistScreen() {
   async function handleSignSave(dataUrl: string) {
     const now = new Date().toISOString()
     const name = signerName.trim() || currentEvaluatorName
-
-    // 서명 이미지 Drive 저장 (fire-and-forget)
     const sigBase64 = dataUrl.split(',')[1]
     gasSaveSignatureImage(sigBase64, name, currentEvaluatorId).catch(() => {})
-
     if (signMode === 'submit') {
       await applySignatureAndSubmit(dataUrl, now, name)
       setSignMode(null)
@@ -375,7 +358,6 @@ export default function ChecklistScreen() {
   function handleSignatureButtonClick() {
     setSignerName(evaluatorInfo?.name ?? currentEvaluatorName)
     if (existingSignature && hasSigned) {
-      // 기존 서명 재사용: 즉시 배치 서명
       const now = new Date().toISOString()
       const name = evaluatorInfo?.name ?? currentEvaluatorName
       visibleItems.forEach(item => {
@@ -390,204 +372,182 @@ export default function ChecklistScreen() {
     }
   }
 
-  const headerInfo = `${subject.name}${subject.employeeId ? ' · ' + subject.employeeId : ''}`
+  const pct = visibleItems.length ? Math.round((doneCount / visibleItems.length) * 100) : 0
+  const roleLabel = ROLE_LABELS[role]
 
-  const serverBtnLabel =
-    serverStatus === 'saving' ? '저장중...' :
-    serverStatus === 'error' ? '오류' : '임시저장'
-
-  const serverBtnClass =
-    serverStatus === 'error' ? 'text-xs text-white bg-red-500 rounded-lg px-2 py-1' :
-    'text-xs text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg px-2 py-1 disabled:opacity-60'
+  // Build running item index across groups
+  let itemCounter = 0
 
   return (
-    <>
-      <div className="min-h-screen bg-gray-50">
-        <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-3 py-2">
-          <div className="max-w-3xl mx-auto">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-xs text-gray-400 truncate">{weekType === '4week' ? '4주' : '8주'} · {ROLE_LABELS[role]}</p>
-                <p className="text-sm font-semibold text-gray-800 truncate">{headerInfo}</p>
-                <p className="text-xs text-gray-500">
-                  완료 {doneCount}/{visibleItems.length} · 합계 {totalScore}점
-                  {isSubmitted && <span className="ml-2 text-green-600 font-medium">제출완료</span>}
-                </p>
-              </div>
-              <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-                <button
-                  onClick={handleSignatureButtonClick}
-                  className="text-xs text-gray-600 border border-gray-200 rounded-lg px-2 py-1 hover:bg-gray-50"
-                >
-                  전자서명{hasSigned ? ' ✓' : ''}
-                </button>
-                <button
-                  onClick={handleServerLoadOpen}
-                  className="text-xs text-indigo-600 border border-indigo-200 rounded-lg px-2 py-1 hover:bg-indigo-50"
-                >
-                  불러오기
-                </button>
-                <button
-                  onClick={handleServerSave}
-                  disabled={serverStatus === 'saving'}
-                  className={serverBtnClass}
-                >
-                  {serverBtnLabel}
-                </button>
-                <button
-                  onClick={() =>
-                    import('../../lib/excel/exportExcel')
-                      .then(m => m.exportToExcel(buildSession(), isSubmitted))
-                      .catch(e => alert((e as Error).message))
-                  }
-                  className="text-xs text-white bg-green-600 hover:bg-green-700 rounded-lg px-2 py-1"
-                >
-                  엑셀
-                </button>
-                <button
-                  onClick={reset}
-                  className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-2 py-1"
-                >
-                  처음으로
-                </button>
-              </div>
-            </div>
-          </div>
-        </header>
+    <div className="cl">
+      <Header
+        title={`${weekType === '4week' ? '4주' : '8주'} 체크리스트`}
+        sub={`${subject.name} · ${roleLabel}${evaluatorInfo?.name ? ' · ' + evaluatorInfo.name : ''}`}
+        onBack={reset}
+        chip={isSubmitted ? '제출완료' : `${roleLabel} 평가`}
+      />
 
-        <div className="h-1 bg-gray-100">
-          <div
-            className="h-1 bg-blue-500 transition-all"
-            style={{ width: `${visibleItems.length ? (doneCount / visibleItems.length) * 100 : 0}%` }}
-          />
-        </div>
-
-        <main className="max-w-3xl mx-auto px-2 py-2 flex flex-col gap-1.5 pb-28">
-          {/* 설문 정보 */}
-          <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
-            <p className="text-xs font-semibold text-gray-500 mb-2">설문 정보</p>
-            {role === 'preceptee' && (
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">부서</label>
-                  <input type="text" value={surveyMeta.department}
-                    onChange={e => updateSurveyMeta({ department: e.target.value })}
-                    placeholder="예) 내과병동"
-                    className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">배치일</label>
-                  <input type="date" value={surveyMeta.deploymentDate}
-                    onChange={e => updateSurveyMeta({ deploymentDate: e.target.value })}
-                    className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">교육기간 시작일</label>
-                  <input type="date" value={surveyMeta.educationPeriodStart}
-                    onChange={e => updateSurveyMeta({ educationPeriodStart: e.target.value })}
-                    className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">교육기간 종료일</label>
-                  <input type="date" value={surveyMeta.educationPeriodEnd}
-                    onChange={e => updateSurveyMeta({ educationPeriodEnd: e.target.value })}
-                    className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400" />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs text-gray-500 mb-0.5">교육 실행일 (전체 일괄 적용)</label>
-                  <input type="date" value={bulkDate}
-                    onChange={e => handleBulkDateChange(e.target.value)}
-                    className="w-full border border-blue-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400" />
-                  <p className="text-xs text-gray-400 mt-0.5">선택 시 전 문항 일괄 적용 · 각 문항에서 개별 수정 가능</p>
-                </div>
-              </div>
-            )}
-            {role === 'preceptor' && (
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">부서</label>
-                  <input type="text" value={surveyMeta.department}
-                    onChange={e => updateSurveyMeta({ department: e.target.value })}
-                    placeholder="예) 내과병동"
-                    className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">교육기간 시작일</label>
-                  <input type="date" value={surveyMeta.educationPeriodStart}
-                    onChange={e => updateSurveyMeta({ educationPeriodStart: e.target.value })}
-                    className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">교육기간 종료일</label>
-                  <input type="date" value={surveyMeta.educationPeriodEnd}
-                    onChange={e => updateSurveyMeta({ educationPeriodEnd: e.target.value })}
-                    className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400" />
-                </div>
-              </div>
-            )}
-            {(role === 'educator' || role === 'headNurse') && (
-              <div className="text-xs text-gray-400 flex flex-wrap gap-x-4 gap-y-0.5">
-                {surveyMeta.department && <span>부서: {surveyMeta.department}</span>}
-                {surveyMeta.deploymentDate && <span>배치일: {surveyMeta.deploymentDate}</span>}
-                {surveyMeta.educationPeriodStart && (
-                  <span>교육기간: {surveyMeta.educationPeriodStart} ~ {surveyMeta.educationPeriodEnd}</span>
-                )}
-                {!surveyMeta.department && !surveyMeta.deploymentDate && !surveyMeta.educationPeriodStart && (
-                  <span>프리셉티/프리셉터가 먼저 입력합니다</span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* 첫 점수 자동 적용 안내 */}
-          {doneCount === 0 && !bulkScoreApplied.current && visibleItems.length > 1 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-700">
-              첫 번째 점수 입력 시 전체 문항에 자동 적용됩니다. 이후 개별 수정하세요.
-            </div>
-          )}
-
-          {/* 체크리스트 카드 */}
-          {visibleItems.map(item => {
-            const result = getResult(item.id)
-            if (!result) return null
-            return (
-              <ChecklistCard
-                key={item.id}
-                item={item}
-                result={result}
-                role={role}
-                isLocked={isSubmitted}
-                onScoreChange={score => handleScoreChange(item.id, score)}
-                onEvaluationPatch={patch => updateEvaluation(item.id, role, patch)}
-              />
-            )
-          })}
-        </main>
-
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-2">
-          <div className="max-w-3xl mx-auto flex items-center justify-between">
-            {role === 'headNurse' && headNurseAvgScore !== null && (
-              <span className={`text-sm font-semibold ${headNurseAvgScore < 70 ? 'text-red-500' : 'text-green-600'}`}>
-                평균 {headNurseAvgScore.toFixed(1)}점
+      {/* Progress strip */}
+      <div className="prog">
+        <div className="prog__row">
+          <span className="prog__meta">입력 <b className="t-num">{doneCount}</b> / {visibleItems.length}</span>
+          <span className="prog__spacer" />
+          {role !== 'preceptee' && evalScorePct !== null && (
+            <span className="prog__total">
+              총점 <span className="t-num" style={{ color: evalScorePct < 70 ? 'var(--danger)' : 'var(--crimson-700)', fontSize: 14 }}>
+                {evalScorePct.toFixed(1)}점
               </span>
-            )}
-            <button
-              onClick={handleFinalSubmitStart}
-              disabled={isSubmitted}
-              className="ml-auto bg-purple-600 text-white rounded-xl px-5 py-2.5 text-sm font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitted ? '제출완료' : '최종 제출'}
-            </button>
-          </div>
+            </span>
+          )}
         </div>
+        <div className="prog__bar"><div className="prog__fill" style={{ width: `${pct}%` }} /></div>
       </div>
 
+      {/* Survey meta (preceptee / preceptor) */}
+      {(role === 'preceptee' || role === 'preceptor') && (
+        <div className="meta-panel">
+          <div className="meta-panel__title">설문 정보</div>
+          <div className="meta-grid">
+            <div className="meta-field">
+              <label>부서</label>
+              <input type="text" value={surveyMeta.department}
+                onChange={e => updateSurveyMeta({ department: e.target.value })}
+                placeholder="예) 내과병동" />
+            </div>
+            {role === 'preceptee' && (
+              <>
+                <div className="meta-field">
+                  <label>배치일</label>
+                  <input type="date" value={surveyMeta.deploymentDate}
+                    onChange={e => updateSurveyMeta({ deploymentDate: e.target.value })} />
+                </div>
+                <div className="meta-field">
+                  <label>교육기간 시작일</label>
+                  <input type="date" value={surveyMeta.educationPeriodStart}
+                    onChange={e => updateSurveyMeta({ educationPeriodStart: e.target.value })} />
+                </div>
+                <div className="meta-field">
+                  <label>교육기간 종료일</label>
+                  <input type="date" value={surveyMeta.educationPeriodEnd}
+                    onChange={e => updateSurveyMeta({ educationPeriodEnd: e.target.value })} />
+                </div>
+                <div className="meta-field" style={{ gridColumn: '1 / -1' }}>
+                  <label>교육 실행일 (전체 일괄 적용)</label>
+                  <input type="date" value={bulkDate} onChange={e => handleBulkDateChange(e.target.value)} />
+                  <p className="meta-hint">선택 시 전 문항 일괄 적용 · 각 문항에서 개별 수정 가능</p>
+                </div>
+              </>
+            )}
+            {role === 'preceptor' && (
+              <>
+                <div className="meta-field">
+                  <label>교육기간 시작일</label>
+                  <input type="date" value={surveyMeta.educationPeriodStart}
+                    onChange={e => updateSurveyMeta({ educationPeriodStart: e.target.value })} />
+                </div>
+                <div className="meta-field">
+                  <label>교육기간 종료일</label>
+                  <input type="date" value={surveyMeta.educationPeriodEnd}
+                    onChange={e => updateSurveyMeta({ educationPeriodEnd: e.target.value })} />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Bulk-score hint */}
+      {doneCount === 0 && !bulkScoreApplied.current && visibleItems.length > 1 && (
+        <div className="bulk-hint">
+          첫 번째 점수 입력 시 전체 {visibleItems.length}개 문항에 자동 적용됩니다. 이후 개별 수정하세요.
+        </div>
+      )}
+
+      {/* Checklist rows grouped by category */}
+      <div style={{ flex: 1 }}>
+        {groups.map(g => {
+          const gAns = g.items.filter(i => { const r = getResult(i.id); return r && r[roleField].score !== null }).length
+          return (
+            <section key={g.cat}>
+              <div className="grp__head">
+                <span className="grp__name">{g.cat}</span>
+                <span className="grp__count">{g.items.length}문항</span>
+                <span className="grp__done t-num">{gAns}/{g.items.length}</span>
+              </div>
+              {g.items.map(item => {
+                itemCounter++
+                const result = getResult(item.id)
+                if (!result) return null
+                return (
+                  <ChecklistCard
+                    key={item.id}
+                    item={item}
+                    itemIndex={itemCounter}
+                    result={result}
+                    role={role}
+                    isLocked={isSubmitted}
+                    onScoreChange={score => handleScoreChange(item.id, score)}
+                    onEvaluationPatch={patch => updateEvaluation(item.id, role, patch)}
+                  />
+                )
+              })}
+            </section>
+          )
+        })}
+        <div style={{ height: 8 }} />
+      </div>
+
+      {/* Sticky action bar */}
+      <div className="actionbar">
+        <button
+          className={`btn btn--secondary btn--sm ${hasSigned ? 'sig-pill--done' : ''}`}
+          style={hasSigned ? { borderColor: 'var(--crimson-300)', color: 'var(--crimson-700)', background: 'var(--crimson-50)' } : {}}
+          onClick={handleSignatureButtonClick}
+        >
+          {hasSigned ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+          )}
+          {hasSigned ? '서명됨' : '전자서명'}
+        </button>
+
+        <button className="btn btn--secondary btn--sm" onClick={handleServerLoadOpen}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="8 17 12 21 16 17" /><line x1="12" y1="12" x2="12" y2="21" />
+            <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29" />
+          </svg>
+          불러오기
+        </button>
+
+        <button
+          className={`btn btn--sm ${serverStatus === 'error' ? 'btn--danger-outline' : 'btn--secondary'}`}
+          onClick={handleServerSave}
+          disabled={serverStatus === 'saving'}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
+          </svg>
+          {serverStatus === 'saving' ? '저장중…' : serverStatus === 'error' ? '오류' : '임시저장'}
+        </button>
+
+        <button
+          className="btn btn--primary btn--sm grow"
+          onClick={handleFinalSubmitStart}
+          disabled={isSubmitted}
+        >
+          {isSubmitted ? '제출완료' : '최종 제출'}
+        </button>
+      </div>
+
+      {toast && <div className="toast">{toast}</div>}
+
       {showLowScore && (
-        <LowScoreModal
-          score={pendingScore}
-          onConfirm={handleLowScoreConfirm}
-          onCancel={() => setShowLowScore(false)}
-        />
+        <LowScoreModal score={pendingScore} onConfirm={handleLowScoreConfirm} onCancel={() => setShowLowScore(false)} />
       )}
 
       {showFinalSubmit && (
@@ -597,18 +557,12 @@ export default function ChecklistScreen() {
           evaluatorId={currentEvaluatorId}
           evalScorePct={evalScorePct}
           onConfirm={doFinalSubmit}
-          onCancel={async () => {
-            setShowFinalSubmit(false)
-            await handleServerSave()
-          }}
+          onCancel={async () => { setShowFinalSubmit(false); await handleServerSave() }}
         />
       )}
 
       {showUnanswered && (
-        <UnansweredModal
-          itemNums={unansweredNums}
-          onClose={() => setShowUnanswered(false)}
-        />
+        <UnansweredModal itemNums={unansweredNums} onClose={() => setShowUnanswered(false)} />
       )}
 
       {signMode !== null && (
@@ -637,6 +591,6 @@ export default function ChecklistScreen() {
           onContinue={() => { setShowSaveComplete(false); setServerStatus('idle') }}
         />
       )}
-    </>
+    </div>
   )
 }

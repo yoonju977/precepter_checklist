@@ -9,43 +9,43 @@ type Props = {
 
 export default function ServerLoadModal({ sessions, error, onSelect, onClose }: Props) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-gray-800">서버에서 불러오기</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+    <div className="scrim scrim--center">
+      <div className="modal">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h3 className="modal__title" style={{ margin: 0 }}>서버에서 불러오기</h3>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-400)', fontSize: 22, lineHeight: 1, padding: '0 4px' }}
+          >×</button>
         </div>
 
         {error && (
-          <p className="text-sm text-red-500 mb-3">{error}</p>
+          <p style={{ font: '500 13px/1.4 var(--font-sans)', color: 'var(--danger)', marginBottom: 12 }}>{error}</p>
         )}
 
         {!error && sessions.length === 0 && (
-          <p className="text-sm text-gray-400 text-center py-6">불러오는 중...</p>
+          <p style={{ font: '400 14px/1 var(--font-sans)', color: 'var(--ink-400)', textAlign: 'center', padding: '24px 0' }}>불러오는 중…</p>
         )}
 
         {sessions.length > 0 && (
-          <ul className="flex flex-col gap-2 max-h-72 overflow-y-auto">
+          <ul style={{ listStyle: 'none', margin: '0 0 14px', padding: 0, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflowY: 'auto' }}>
             {sessions.map(s => (
               <li key={s.fileId}>
                 <button
                   onClick={() => onSelect(s.fileId)}
-                  className="w-full text-left border border-gray-200 rounded-xl px-3 py-2.5 hover:bg-gray-50 transition-colors"
+                  style={{ width: '100%', textAlign: 'left', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '10px 13px', background: '#fff', cursor: 'pointer', transition: 'background .1s' }}
+                  onMouseOver={e => (e.currentTarget.style.background = 'var(--ink-50)')}
+                  onMouseOut={e => (e.currentTarget.style.background = '#fff')}
                 >
-                  <p className="text-sm font-medium text-gray-800 truncate">{s.name}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{new Date(s.updatedAt).toLocaleString('ko-KR')}</p>
+                  <p style={{ font: '600 13px/1.3 var(--font-sans)', color: 'var(--ink-900)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</p>
+                  <p style={{ font: '400 11px/1 var(--font-sans)', color: 'var(--ink-400)', margin: '4px 0 0' }}>{new Date(s.updatedAt).toLocaleString('ko-KR')}</p>
                 </button>
               </li>
             ))}
           </ul>
         )}
 
-        <button
-          onClick={onClose}
-          className="mt-4 w-full border border-gray-200 rounded-xl py-2 text-sm text-gray-500 hover:bg-gray-50"
-        >
-          취소
-        </button>
+        <button className="btn btn--secondary btn--block" onClick={onClose}>취소</button>
       </div>
     </div>
   )
