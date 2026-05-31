@@ -34,6 +34,10 @@ const SUMMARY_COL = {
 // 주차별 총 문항수
 const TOTAL_ITEMS: Record<string, number> = { '4week': 158, '8week': 82 }
 
+// 하단 서명란 행 (0-based, ExcelJS image tl.row)
+// 4주 row185(1-based) = 184(0-based), 8주 row109(1-based) = 108(0-based)
+const BOTTOM_SIG_ROW: Record<string, number> = { '4week': 184, '8week': 108 }
+
 async function loadWorkbook(weekType: string): Promise<{ workbook: ExcelJS.Workbook; sheet: ExcelJS.Worksheet }> {
   const templateUrl = import.meta.env.BASE_URL + 'templates/checklist-template.xlsx'
   const response = await fetch(templateUrl)
@@ -85,7 +89,34 @@ function fillSheet(sheet: ExcelJS.Worksheet, session: ChecklistSession) {
   })
 }
 
-function fillCoverSheet(workbook: ExcelJS.Workbook, session: ChecklistSession) {
+function fillChecklistSheetHeader(sheet: ExcelJS.Worksheet, session: ChecklistSession) {
+  const { surveyMeta, employeeId, targetName, preceptorId, preceptorName } = session
+
+  // 교육기간: row3 (merged) — col1에 기입
+  if (surveyMeta?.educationPeriodStart) {
+    const period = surveyMeta.educationPeriodEnd
+      ? `${surveyMeta.educationPeriodStart} ~ ${surveyMeta.educationPeriodEnd}`
+      : surveyMeta.educationPeriodStart
+    sheet.getRow(3).getCell(1).value = period
+  }
+
+  // 교육부서: row4, col3
+  if (surveyMeta?.department) {
+    sheet.getRow(4).getCell(3).value = surveyMeta.department
+  }
+
+  // 신입간호사 사번·성명: row9, col3·col4
+  sheet.getRow(9).getCell(3).value = employeeId || ''
+  sheet.getRow(9).getCell(4).value = targetName || ''
+
+  // 프리셉터 사번·성명: row12, col3·col4
+  if (preceptorId || preceptorName) {
+    sheet.getRow(12).getCell(3).value = preceptorId || ''
+    sheet.getRow(12).getCell(4).value = preceptorName || ''
+  }
+}
+
+function fillCoverSheet(workbook: ExcelJS.Workbook, session: ChecklistSession, isFinal = false) {
   const cover = workbook.getWorksheet(COVER_SHEET)
   if (!cover) return
 
@@ -112,6 +143,24 @@ function fillCoverSheet(workbook: ExcelJS.Workbook, session: ChecklistSession) {
   // 배치일: row12, col3
   if (session.surveyMeta?.deploymentDate) {
     cover.getRow(12).getCell(3).value = session.surveyMeta.deploymentDate
+  }
+
+  // 제출일·점수: row15·row16 (최종제출 시만)
+  if (isFinal) {
+    const weekCol = session.weekType === '4week' ? 3 : 4
+    cover.getRow(15).getCell(weekCol).value = new Date().toISOString().slice(0, 10)
+
+    const maxScore = TOTAL_ITEMS[session.weekType] * 3
+    if (maxScore > 0) {
+      let totalEvalScore = 0
+      for (const r of session.results) {
+        const sc = r.preceptor.score !== null ? r.preceptor.score
+          : r.educator.score !== null ? r.educator.score
+          : null
+        if (sc !== null) totalEvalScore += sc
+      }
+      cover.getRow(16).getCell(weekCol).value = Math.round((totalEvalScore / maxScore) * 100 * 10) / 10
+    }
   }
 }
 
@@ -180,7 +229,7 @@ function addSignatureImage(workbook: ExcelJS.Workbook, sheet: ExcelJS.Worksheet,
     const base64 = repSignImage.split(',')[1]
     const imageId = workbook.addImage({ base64, extension: 'png' })
     sheet.addImage(imageId, {
-      tl: { col: COL.SIGNER - 1, row: 7 },
+      tl: { col: COL.SIGNER - 1, row: BOTTOM_SIG_ROW[session.weekType] },
       ext: { width: 80, height: 30 },
     })
   }
@@ -200,7 +249,8 @@ export function buildTempExcelFileName(session: ChecklistSession, role: string, 
 
 export async function exportToExcel(session: ChecklistSession, isFinal = false): Promise<void> {
   const { workbook, sheet } = await loadWorkbook(session.weekType)
-  fillCoverSheet(workbook, session)
+  fillCoverSheet(workbook, session, isFinal)
+  fillChecklistSheetHeader(sheet, session)
   fillSheet(sheet, session)
   fillSummaryTable(sheet, session, isFinal)
   addSignatureImage(workbook, sheet, session)
@@ -217,7 +267,8 @@ export async function exportToExcel(session: ChecklistSession, isFinal = false):
 
 export async function buildExcelBuffer(session: ChecklistSession, isFinal = false): Promise<{ buffer: ArrayBuffer; fileName: string }> {
   const { workbook, sheet } = await loadWorkbook(session.weekType)
-  fillCoverSheet(workbook, session)
+  fillCoverSheet(workbook, session, isFinal)
+  fillChecklistSheetHeader(sheet, session)
   fillSheet(sheet, session)
   fillSummaryTable(sheet, session, isFinal)
   addSignatureImage(workbook, sheet, session)

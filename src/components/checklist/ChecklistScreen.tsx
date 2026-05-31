@@ -357,6 +357,16 @@ export default function ChecklistScreen() {
             {role === 'preceptor' && (
               <div className="flex flex-col gap-3">
                 <div>
+                  <label className="block text-xs text-gray-500 mb-1">부서</label>
+                  <input
+                    type="text"
+                    value={surveyMeta.department}
+                    onChange={e => updateSurveyMeta({ department: e.target.value })}
+                    placeholder="예) 내과병동"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                <div>
                   <label className="block text-xs text-gray-500 mb-1">교육기간 시작일</label>
                   <input
                     type="date"
